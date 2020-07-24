@@ -1,0 +1,4 @@
+requests
+fire
+bs4
+pathos

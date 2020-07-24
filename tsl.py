@@ -1,10 +1,20 @@
 import json
-import requests
+import logging
+
+from pathos.multiprocessing import ProcessingPool as Pool
+
 import fire
+import requests
 from bs4 import BeautifulSoup
 
 LOGIN_PAGE = "https://strenuouslife.co/wp-login.php"
 BADGES_URL = "https://strenuouslife.co/badges"
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+logging.getLogger('urllib3').setLevel(logging.ERROR)
+
 
 class GetBadgeRequirements():
 
@@ -15,25 +25,33 @@ class GetBadgeRequirements():
             'pwd': pwd
             }
 
+    def get_badge_requirement(self, session, badge, url):
+        try:
+            logger.info(f"retrieving {badge} at {url}")
+            page = self.get_page(session, url, "bb-learndash-content-wrap")
+            badge_dict = {}
+            badge_dict["Name"] = badge
+            badge_dict["Completion"] = "TRUE" if page.find(
+                'div', class_="ld-status ld-status-complete ld-secondary-background"
+            ) else "FALSE"
+            requirements = self.get_requirements(session, page)
+            badge_dict["Requirements"] = requirements
+            return badge_dict
+        except Exception as e:
+            logger.exception(f"Check badge '{badge}'")
+
     def get_badge_requirements(self):
-        tsl_list = []
         with requests.Session() as session:
             session.post(LOGIN_PAGE, data=self.payload)
             badges = self.get_badges(session)
-            for badge, url in badges.items(): 
-                try:
-                    page = self.get_page(session, url, "bb-learndash-content-wrap")
-                    badge_dict = {}
-                    badge_dict["Name"] = badge
-                    badge_dict["Completion"] = "TRUE" if page.find(
-                        'div', class_="ld-status ld-status-complete ld-secondary-background"
-                        ) else "FALSE"
-                    requirements = self.get_requirements(session, page)
-                    badge_dict["Requirements"] = requirements
-                    tsl_list.append(badge_dict)
-                except:
-                    print(f"An Exception Occurred: Check badge '{badge}'")
-            self.tsl_dict["Badges"] = tsl_list
+            logger.info(f"Retrieved {len(badges)} badges")
+            logging.debug(f"{badges.keys()}")
+            #TODO: tune this for optimal performance?
+            p = Pool(20)
+            badges = p.map(self.get_badge_requirement, [session]*len(badges), badges, badges.values())
+            logger.debug(badges)
+            self.tsl_dict["Badges"] = badges
+
             with open('badge_requirements.json', 'w') as outfile:
                 json.dump(self.tsl_dict, outfile, indent=4)
 
