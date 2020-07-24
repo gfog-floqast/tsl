@@ -5,8 +5,6 @@ from bs4 import BeautifulSoup
 
 LOGIN_PAGE = "https://strenuouslife.co/wp-login.php"
 BADGES_URL = "https://strenuouslife.co/badges"
-REQUIREMENTS_URL = "https://strenuouslife.co/requirements"
-BADGES = ['penmanship', 'shaving', 'kiss-the-chef', 'backyard-chef']
 
 class GetBadgeRequirements():
 
@@ -18,22 +16,39 @@ class GetBadgeRequirements():
             }
 
     def get_badge_requirements(self):
+        tsl_list = []
         with requests.Session() as session:
             session.post(LOGIN_PAGE, data=self.payload)
-            badges_list = []
-            for badge in BADGES:
-                page = self.get_page(session, f"{BADGES_URL}/{badge}", "bb-learndash-content-wrap")
-                badge_dict = {}
-                badge_dict["Name"] = badge
-                badge_dict["Completion"] = "TRUE" if page.find(
-                    'div', class_="ld-status ld-status-complete ld-secondary-background"
-                    ) else "FALSE"
-                requirements = self.get_requirements(session, page)
-                badge_dict["Requirements"] = requirements
-                badges_list.append(badge_dict)
-            self.tsl_dict["Badges"] = badges_list
+            badges = self.get_badges(session)
+            for badge, url in badges.items(): 
+                try:
+                    page = self.get_page(session, url, "bb-learndash-content-wrap")
+                    badge_dict = {}
+                    badge_dict["Name"] = badge
+                    badge_dict["Completion"] = "TRUE" if page.find(
+                        'div', class_="ld-status ld-status-complete ld-secondary-background"
+                        ) else "FALSE"
+                    requirements = self.get_requirements(session, page)
+                    badge_dict["Requirements"] = requirements
+                    tsl_list.append(badge_dict)
+                except:
+                    print(f"An Exception Occurred: Check badge '{badge}'")
+            self.tsl_dict["Badges"] = tsl_list
             with open('badge_requirements.json', 'w') as outfile:
                 json.dump(self.tsl_dict, outfile, indent=4)
+
+    def get_badges(self, session):
+        badge_dict = {}
+        page = self.get_page(session, BADGES_URL, "course-dir-list bs-dir-list")
+        while page.find('a', class_='next page-numbers'):
+            badges = page.find_all('div', class_='bb-course-cover')
+            for badge in badges:
+                badge_dict[badge.find('a')['title']] = badge.find('a')['href']
+            page = self.get_page(session, page.find('a', class_='next page-numbers')['href'])
+        badges = page.find_all('div', class_='bb-course-cover')
+        for badge in badges:
+            badge_dict[badge.find('a')['title']] = badge.find('a')['href']
+        return badge_dict
 
     def get_requirements(self, session, page):
         requirements = page.find_all('a', class_='ld-item-name')
@@ -44,17 +59,18 @@ class GetBadgeRequirements():
         for requirement in requirements:
             requirement_dict = {}
             requirement_text = requirement.find('div', class_='ld-item-title').contents[0].strip()
-            requirement_dict["Name"] = requirement_text
+            requirement_encoded = requirement_text.encode("ascii", "ignore").decode()
+            requirement_dict["Name"] = requirement_encoded
             self.evaluate_completion(requirement, requirement_dict)
             if requirement.find('span', class_='ld-item-component'):
-                components = self.get_components(session, requirement_text)
+                components = self.get_components(session, requirement)
                 requirement_dict["Components"] = components
             requirements_list.append(requirement_dict)
         return requirements_list
 
     def get_components(self, session, requirement):
-        requirement_kabob = requirement.replace(' ', '-').replace('/', '')
-        results = self.get_page(session, f"{REQUIREMENTS_URL}/{requirement_kabob}", 'ld-table-list-items')
+        requirement_url = requirement['href']
+        results = self.get_page(session, requirement_url, 'ld-table-list-items')
         components = results.find_all('div', class_='ld-table-list-item')
         return self.evaluate_components(components)
 
@@ -69,7 +85,7 @@ class GetBadgeRequirements():
             components_list.append(component_dict)
         return components_list
 
-    def get_page(self, session, url, element):
+    def get_page(self, session, url, element=''):
         page = session.get(url)
         soup = BeautifulSoup(page.content, 'html.parser')
         return soup.find(class_=element)
