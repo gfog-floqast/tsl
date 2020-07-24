@@ -1,17 +1,17 @@
 import json
 import logging
-
-from pathos.multiprocessing import ProcessingPool as Pool
-
-import fire
 import requests
+import fire
+
 from bs4 import BeautifulSoup
+from pathos.multiprocessing import ProcessingPool as Pool
 
 LOGIN_PAGE = "https://strenuouslife.co/wp-login.php"
 BADGES_URL = "https://strenuouslife.co/badges"
+THREADS = 3
 
 logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 logging.getLogger('urllib3').setLevel(logging.ERROR)
 
@@ -27,7 +27,7 @@ class GetBadgeRequirements():
 
     def get_badge_requirement(self, session, badge, url):
         try:
-            logger.info(f"retrieving {badge} at {url}")
+            LOGGER.info("retrieving %s at %s", badge, url)
             page = self.get_page(session, url, "bb-learndash-content-wrap")
             badge_dict = {}
             badge_dict["Name"] = badge
@@ -38,18 +38,17 @@ class GetBadgeRequirements():
             badge_dict["Requirements"] = requirements
             return badge_dict
         except Exception as e:
-            logger.exception(f"Check badge '{badge}'")
+            LOGGER.exception("Check badge '%s' - error: %s", badge, e)
 
     def get_badge_requirements(self):
         with requests.Session() as session:
             session.post(LOGIN_PAGE, data=self.payload)
             badges = self.get_badges(session)
-            logger.info(f"Retrieved {len(badges)} badges")
-            logging.debug(f"{badges.keys()}")
-            #TODO: tune this for optimal performance?
-            p = Pool(20)
-            badges = p.map(self.get_badge_requirement, [session]*len(badges), badges, badges.values())
-            logger.debug(badges)
+            LOGGER.info("Retrieved %s badges", {len(badges)})
+            logging.debug(badges.keys())
+            # TODO: tune this for optimal performance?
+            pool = Pool(THREADS)
+            badges = pool.map(self.get_badge_requirement, [session]*len(badges), badges, badges.values())
             self.tsl_dict["Badges"] = badges
 
             with open('badge_requirements.json', 'w') as outfile:
@@ -103,13 +102,15 @@ class GetBadgeRequirements():
             components_list.append(component_dict)
         return components_list
 
-    def get_page(self, session, url, element=''):
+    @staticmethod
+    def get_page(session, url, element=''):
         page = session.get(url)
         soup = BeautifulSoup(page.content, 'html.parser')
         return soup.find(class_=element)
 
-    def evaluate_completion(self, requirement, dict):
-        dict["Completion"] = "TRUE" if requirement.find('div', class_='ld-status-complete') else "FALSE"
+    @staticmethod
+    def evaluate_completion(requirement, my_dict):
+        my_dict["Completion"] = "TRUE" if requirement.find('div', class_='ld-status-complete') else "FALSE"
 
 
 if __name__ == '__main__':
