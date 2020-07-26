@@ -89,7 +89,9 @@ class GetBadgeRequirements():
 
     def get_components(self, session, requirement):
         requirement_url = requirement['href']
-        results = self.get_page(session, requirement_url, 'ld-table-list-items')
+        results = self.get_page(session, requirement_url, 'site')
+        if results.find('div', class_='ld-alert-messages'):
+            return [{"Name": results.find('div', class_='ld-alert-messages').text.strip(), "Completion": "FALSE"}]
         components = results.find_all('div', class_='ld-table-list-item')
         return self.evaluate_components(components)
 
