@@ -19,7 +19,6 @@ logging.getLogger('urllib3').setLevel(logging.ERROR)
 class GetBadgeRequirements():
 
     def __init__(self, user, pwd):
-        self.tsl_dict = {}
         self.payload = {
             'log': user,
             'pwd': pwd
@@ -28,14 +27,18 @@ class GetBadgeRequirements():
     def get_badge_requirement(self, session, badge, url):
         try:
             LOGGER.info("retrieving %s at %s", badge, url)
-            page = self.get_page(session, url, "bb-learndash-content-wrap")
+            page = self.get_page(session, url, "site-main")
             badge_dict = {}
             badge_dict["Name"] = badge
-            badge_dict["Completion"] = "TRUE" if page.find(
-                'div', class_="ld-status ld-status-complete ld-secondary-background"
-            ) else "FALSE"
-            requirements = self.get_requirements(session, page)
-            badge_dict["Requirements"] = requirements
+            if page.find('div', id='learndash_complete_prerequisites'):
+                badge_dict["Completion"] = "FALSE"
+                badge_dict["Requirements"] = [{"Name": page.find('div', id="learndash_complete_prerequisites").text.strip(), "Completion": 'FALSE'}]
+            else:
+                badge_dict["Completion"] = "TRUE" if page.find(
+                    'div', class_="ld-status ld-status-complete ld-secondary-background"
+                ) else "FALSE"
+                requirements = self.get_requirements(session, page)
+                badge_dict["Requirements"] = requirements
             return badge_dict
         except Exception as e:
             LOGGER.exception("Check badge '%s' - error: %s", badge, e)
@@ -49,10 +52,9 @@ class GetBadgeRequirements():
             # TODO: tune this for optimal performance?
             pool = Pool(THREADS)
             badges = pool.map(self.get_badge_requirement, [session]*len(badges), badges, badges.values())
-            self.tsl_dict["Badges"] = badges
 
             with open('badge_requirements.json', 'w') as outfile:
-                json.dump(self.tsl_dict, outfile, indent=4)
+                json.dump(badges, outfile, indent=4)
 
     def get_badges(self, session):
         badge_dict = {}
