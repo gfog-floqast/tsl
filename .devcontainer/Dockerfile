@@ -1,1 +1,1 @@
-RUN apt-get update && apt-get install ripgrep -y
+RUN apt-get update
