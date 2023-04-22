@@ -1,1 +1,1 @@
-RUN apt-get update
+RUN sudo apt-get update
