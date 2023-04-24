@@ -6,8 +6,8 @@
 	"image": "mcr.microsoft.com/devcontainers/python:0-3.11",
 	"features": {
 		"ghcr.io/devcontainers-contrib/features/coverage-py:2": {},
-		"ghcr.io/devcontainers-contrib/features/ripgrep:1": {}
-
+		"ghcr.io/devcontainers-contrib/features/ripgrep:1": {},
+		"ghcr.io/devcontainers-contrib/features/neovim-homebrew:1": {}
 	},
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
